@@ -8,16 +8,6 @@ import 'package:rxdart/subjects.dart';
 enum StoriesType { topStories, newStories }
 
 class HackerNewsBloc {
-  Stream<UnmodifiableListView<Article>> get articles => _articlesSubject.stream;
-
-  final _articlesSubject = BehaviorSubject<UnmodifiableListView<Article>>();
-
-  var _articles = <Article>[];
-
-  Sink<StoriesType> get storiesType => _storiesTypeController.sink;
-
-  final _storiesTypeController = StreamController<StoriesType>();
-
   static final List<int> _newIds = [
     31949731,
     31929941,
@@ -34,11 +24,24 @@ class HackerNewsBloc {
     31941902
   ];
 
+  Stream<bool> get isLoading => _isLoadingSubject.stream;
+  
+  final _isLoadingSubject = BehaviorSubject<bool>.seeded(false);
+
+  Stream<UnmodifiableListView<Article>> get articles => _articlesSubject.stream;
+
+  final _articlesSubject = BehaviorSubject<UnmodifiableListView<Article>>();
+
+  var _articles = <Article>[];
+
+  Sink<StoriesType> get storiesType => _storiesTypeController.sink;
+
+  final _storiesTypeController = StreamController<StoriesType>();
+
   HackerNewsBloc() {
     _getArticlesAndUpdate(_topIds);
 
     _storiesTypeController.stream.listen((storiesType) {
-      List<int> _ids;
       if (storiesType == StoriesType.newStories) {
         _getArticlesAndUpdate(_newIds);
       } else {
@@ -49,8 +52,10 @@ class HackerNewsBloc {
   }
 
   _getArticlesAndUpdate(List<int> ids){
+    _isLoadingSubject.add(true);
     _updateArticles(ids).then((value) {
       _articlesSubject.add(UnmodifiableListView(_articles));
+      _isLoadingSubject.add(false);
     });
   }
 
