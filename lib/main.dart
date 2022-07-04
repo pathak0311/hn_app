@@ -1,15 +1,19 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
-import 'package:http/http.dart';
+import 'package:hn_app/src/hn_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 import 'src/article.dart';
 
 void main() {
-  runApp(const MyApp());
+  final hnBloc = HackerNewsBloc();
+  runApp(MyApp(bloc: hnBloc));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  final HackerNewsBloc bloc;
+
+  const MyApp({Key? key, required this.bloc}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -18,13 +22,19 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(
+        title: 'Flutter Hacker News',
+        bloc: bloc,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
+  final HackerNewsBloc bloc;
+
+  const MyHomePage({Key? key, required this.title, required this.bloc})
+      : super(key: key);
   final String title;
 
   @override
@@ -32,48 +42,37 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final List<int> _ids = [
-    31932349,
-    31949348,
-    31945425,
-    31932250,
-    31941902,
-    31949731,
-    31929941,
-    31939983,
-    31932808,
-    31953470
-  ];
-
-  Future<Article> _getArticle(int id) async {
-    final storyUrl = "https://hacker-news.firebaseio.com/v0/item/$id.json";
-    final storyRes = await get(Uri.parse(storyUrl));
-    if (storyRes.statusCode == 200) {
-      return parseArticle(storyRes.body);
-    }
-    return Article();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: Text(widget.title),
-        ),
-        body: ListView(
-          children: _ids.map((e) {
-            return FutureBuilder<Article>(
-                future: _getArticle(e),
-                builder:
-                    (BuildContext context, AsyncSnapshot<Article> snapshot) {
-                  if (snapshot.connectionState == ConnectionState.done) {
-                    return _buildItem(snapshot.data!);
-                  } else {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                });
-          }).toList(),
-        ));
+      appBar: AppBar(
+        title: Text(widget.title),
+      ),
+      body: StreamBuilder<UnmodifiableListView<Article>>(
+          stream: widget.bloc.articles,
+          initialData: UnmodifiableListView<Article>([]),
+          builder: (context, snapshot) {
+            return ListView(
+              children: snapshot.data!.map(_buildItem).toList(),
+            );
+          }),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0,
+        items: [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.arrow_drop_up), label: 'Top Stories'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.new_releases), label: 'New Stories')
+        ],
+        onTap: (index) {
+          if (index == 0) {
+            widget.bloc.storiesType.add(StoriesType.topStories);
+          } else if (index == 1) {
+            widget.bloc.storiesType.add(StoriesType.newStories);
+          }
+        },
+      ),
+    );
   }
 
   Widget _buildItem(Article article) {
@@ -83,7 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
       child: ExpansionTile(
         title: Text(
           article.title!,
-          style: TextStyle(fontSize: 24.0),
+          style: const TextStyle(fontSize: 24.0),
         ),
         children: [
           Row(
