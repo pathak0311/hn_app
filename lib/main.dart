@@ -95,7 +95,7 @@ class _MyHomePageState extends State<MyHomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text(article.type),
+              Text('${article.descendants} Comments'),
               IconButton(
                   icon: const Icon(Icons.launch),
                   onPressed: () async {
@@ -133,16 +133,17 @@ class _LoadingInfoState extends State<LoadingInfo>
   Widget build(BuildContext context) {
     return StreamBuilder(
         stream: widget.isLoading,
-        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
-          _controller.forward();
-          if (snapshot.hasData && snapshot.data!) {
+        builder: (BuildContext context, AsyncSnapshot<bool> loading) {
+          if (loading.hasData && loading.data!) {
+            _controller.forward().then((f) {
+              _controller.reverse();
+            });
             return FadeTransition(
               opacity: Tween(begin: 0.5, end: 1.0).animate(
                   CurvedAnimation(parent: _controller, curve: Curves.easeIn)),
               child: const Icon(FontAwesomeIcons.hackerNewsSquare),
             );
           }
-          _controller.reverse();
           return Container();
         });
   }

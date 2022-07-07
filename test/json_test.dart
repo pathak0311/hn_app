@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hn_app/src/article.dart';
 import 'package:http/http.dart';
@@ -20,7 +18,7 @@ void main() {
   });
 
   test("parses item.json over a network", () async {
-    final url = "https://hacker-news.firebaseio.com/v0/beststories.json";
+    const url = "https://hacker-news.firebaseio.com/v0/beststories.json";
 
     final res = await get(Uri.parse(url));
 

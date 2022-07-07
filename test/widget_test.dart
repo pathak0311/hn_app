@@ -9,11 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hn_app/main.dart';
+import 'package:hn_app/src/hn_bloc.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    HackerNewsBloc bloc = HackerNewsBloc();
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(bloc: bloc,));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
