@@ -16,13 +16,23 @@ class MyApp extends StatelessWidget {
 
   const MyApp({Key? key, required this.bloc}) : super(key: key);
 
+  static const primaryColor = Colors.white;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        primarySwatch: Colors.deepOrange,
-      ),
+          scaffoldBackgroundColor: primaryColor,
+          appBarTheme: const AppBarTheme(backgroundColor: primaryColor),
+          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Colors.black,
+              selectedItemColor: primaryColor,
+              unselectedItemColor: Colors.white54),
+          textTheme: Theme.of(context).textTheme.copyWith(
+              caption: const TextStyle(color: Colors.white54),
+              subtitle1:
+                  const TextStyle(fontFamily: 'PressStart', fontSize: 12.0))),
       home: MyHomePage(
         title: 'Flutter Hacker News',
         bloc: bloc,
@@ -49,6 +59,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        elevation: 0.0,
         title: Text(widget.title),
         leading: LoadingInfo(isLoading: widget.bloc.isLoading),
       ),
@@ -85,23 +96,29 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget _buildItem(Article article) {
     return Padding(
       key: Key(article.title!),
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
       child: ExpansionTile(
         title: Text(
           article.title!,
           style: const TextStyle(fontSize: 24.0),
         ),
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Text('${article.descendants} Comments'),
-              IconButton(
-                  icon: const Icon(Icons.launch),
-                  onPressed: () async {
-                    await launchUrl(Uri.parse(article.url!));
-                  })
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text('${article.descendants} Comments'),
+                const SizedBox(
+                  width: 16.0,
+                ),
+                IconButton(
+                    icon: const Icon(Icons.launch),
+                    onPressed: () async {
+                      await launchUrl(Uri.parse(article.url!));
+                    })
+              ],
+            ),
           )
         ],
       ),
