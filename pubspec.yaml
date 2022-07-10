@@ -15,6 +15,7 @@ dependencies:
   http: ^0.13.4
   rxdart: ^0.27.4
   font_awesome_flutter: ^10.1.0
+  webview_flutter: ^3.0.4
   flutter:
     sdk: flutter
 
@@ -33,6 +34,6 @@ flutter:
   uses-material-design: true
 
   fonts:
-    - family: PressStart
+    - family: Garamond
       fonts:
-        - asset: fonts/PressStart2P-Regular.ttf
+        - asset: fonts/CormorantGaramond-Regular.ttf
