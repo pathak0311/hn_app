@@ -5,19 +5,26 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hn_app/src/hn_bloc.dart';
+import 'package:hn_app/src/prefs_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'src/article.dart';
 
 void main() {
   final hnBloc = HackerNewsBloc();
-  runApp(MyApp(bloc: hnBloc));
+  final prefsBloc = PrefsBloc();
+  runApp(MyApp(
+    hackerNewsBloc: hnBloc,
+    prefsBloc: prefsBloc,
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  final HackerNewsBloc bloc;
+  final HackerNewsBloc hackerNewsBloc;
+  final PrefsBloc prefsBloc;
 
-  const MyApp({Key? key, required this.bloc}) : super(key: key);
+  const MyApp({Key? key, required this.hackerNewsBloc, required this.prefsBloc})
+      : super(key: key);
 
   static const primaryColor = Colors.white;
 
@@ -43,16 +50,22 @@ class MyApp extends StatelessWidget {
                   fontWeight: FontWeight.w800))),
       home: MyHomePage(
         title: 'Flutter Hacker News',
-        bloc: bloc,
+        hackerNewsBloc: hackerNewsBloc,
+        prefsBloc: prefsBloc,
       ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  final HackerNewsBloc bloc;
+  final HackerNewsBloc hackerNewsBloc;
+  final PrefsBloc prefsBloc;
 
-  const MyHomePage({Key? key, required this.title, required this.bloc})
+  const MyHomePage(
+      {Key? key,
+      required this.title,
+      required this.hackerNewsBloc,
+      required this.prefsBloc})
       : super(key: key);
   final String title;
 
@@ -69,7 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         elevation: 0.0,
         title: Text(widget.title),
-        leading: LoadingInfo(isLoading: widget.bloc.isLoading),
+        leading: LoadingInfo(isLoading: widget.hackerNewsBloc.isLoading),
         actions: [
           Builder(builder: (context) {
             return IconButton(
@@ -78,8 +91,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   final Article? result = await showSearch(
                       context: context,
                       delegate: ArticleSearch(_currentIndex == 0
-                          ? widget.bloc.topArticles
-                          : widget.bloc.newArticles));
+                          ? widget.hackerNewsBloc.topArticles
+                          : widget.hackerNewsBloc.newArticles));
 
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text(result!.title!)));
@@ -97,7 +110,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: (_currentIndex == 0)
           ? StreamBuilder<UnmodifiableListView<Article>>(
-              stream: widget.bloc.topArticles,
+              stream: widget.hackerNewsBloc.topArticles,
               initialData: UnmodifiableListView<Article>([]),
               builder: (context, snapshot) {
                 return ListView(
@@ -106,7 +119,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 );
               })
           : StreamBuilder<UnmodifiableListView<Article>>(
-              stream: widget.bloc.newArticles,
+              stream: widget.hackerNewsBloc.newArticles,
               initialData: UnmodifiableListView<Article>([]),
               builder: (context, snapshot) {
                 return ListView(
@@ -120,16 +133,23 @@ class _MyHomePageState extends State<MyHomePage> {
           BottomNavigationBarItem(
               icon: Icon(Icons.arrow_drop_up), label: 'Top Stories'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.new_releases), label: 'New Stories')
+              icon: Icon(Icons.new_releases), label: 'New Stories'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings')
         ],
         onTap: (index) {
           setState(() {
             _currentIndex = index;
           });
           if (index == 0) {
-            widget.bloc.storiesType.add(StoriesType.topStories);
+            widget.hackerNewsBloc.storiesType.add(StoriesType.topStories);
           } else if (index == 1) {
-            widget.bloc.storiesType.add(StoriesType.newStories);
+            widget.hackerNewsBloc.storiesType.add(StoriesType.newStories);
+          } else if (index == 2) {
+            showModalBottomSheet(
+                context: context,
+                builder: (context) {
+                  return PrefsSheet(prefsBloc: widget.prefsBloc);
+                });
           }
         },
       ),
@@ -170,16 +190,24 @@ class _MyHomePageState extends State<MyHomePage> {
                         })
                   ],
                 ),
-                SizedBox(
-                    height: 200,
-                    child: WebView(
-                      initialUrl: article.url!,
-                      javascriptMode: JavascriptMode.unrestricted,
-                      gestureRecognizers:
-                          <Factory<OneSequenceGestureRecognizer>>{}..add(
-                              Factory<VerticalDragGestureRecognizer>(
-                                  () => VerticalDragGestureRecognizer())),
-                    ))
+                StreamBuilder<PrefsState>(
+                    stream: widget.prefsBloc.currentPrefs,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.showWebView) {
+                        return SizedBox(
+                            height: 200,
+                            child: WebView(
+                              initialUrl: article.url!,
+                              javascriptMode: JavascriptMode.unrestricted,
+                              gestureRecognizers: <
+                                  Factory<OneSequenceGestureRecognizer>>{}
+                                ..add(Factory<VerticalDragGestureRecognizer>(
+                                    () => VerticalDragGestureRecognizer())),
+                            ));
+                      } else {
+                        return Container();
+                      }
+                    })
               ],
             ),
           )
@@ -338,6 +366,34 @@ class HackerNewsWebPage extends StatelessWidget {
       body: WebView(
         initialUrl: url,
       ),
+    );
+  }
+}
+
+class PrefsSheet extends StatefulWidget {
+  final PrefsBloc prefsBloc;
+
+  const PrefsSheet({Key? key, required this.prefsBloc}) : super(key: key);
+
+  @override
+  State<PrefsSheet> createState() => _PrefsSheetState();
+}
+
+class _PrefsSheetState extends State<PrefsSheet> {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: StreamBuilder<PrefsState>(
+          stream: widget.prefsBloc.currentPrefs,
+          builder: (BuildContext context, AsyncSnapshot<PrefsState> snapshot) {
+            return snapshot.hasData
+                ? Switch(
+                    value: snapshot.data!.showWebView,
+                    onChanged: (value) {
+                      widget.prefsBloc.showWebViewPref.add(value);
+                    })
+                : Text('Nothing');
+          }),
     );
   }
 }

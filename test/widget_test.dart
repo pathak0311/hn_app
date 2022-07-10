@@ -15,7 +15,7 @@ void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     HackerNewsBloc bloc = HackerNewsBloc();
     // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp(bloc: bloc,));
+    await tester.pumpWidget(MyApp(hackerNewsBloc: bloc,));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
