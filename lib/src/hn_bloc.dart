@@ -14,9 +14,12 @@ class HackerNewsBloc {
 
   final _isLoadingSubject = BehaviorSubject<bool>.seeded(false);
 
-  Stream<UnmodifiableListView<Article>> get articles => _articlesSubject.stream;
+  Stream<UnmodifiableListView<Article>> get topArticles => _topArticlesSubject.stream;
+  Stream<UnmodifiableListView<Article>> get newArticles => _newArticlesSubject.stream;
 
-  final _articlesSubject = BehaviorSubject<UnmodifiableListView<Article>>();
+
+  final _topArticlesSubject = BehaviorSubject<UnmodifiableListView<Article>>();
+  final _newArticlesSubject = BehaviorSubject<UnmodifiableListView<Article>>();
 
   var _articles = <Article>[];
 
@@ -29,22 +32,24 @@ class HackerNewsBloc {
     _initializeArticles();
 
     _storiesTypeController.stream.listen((storiesType) async {
-      _getArticlesAndUpdate(await _getIds(storiesType));
+      _getArticlesAndUpdate(_topArticlesSubject, await _getIds(StoriesType.topStories));
+      _getArticlesAndUpdate(_newArticlesSubject, await _getIds(StoriesType.newStories));
     });
   }
 
   Future<void> _initializeArticles() async {
-    _getArticlesAndUpdate(await _getIds(StoriesType.topStories));
+    _getArticlesAndUpdate(_topArticlesSubject, await _getIds(StoriesType.topStories));
+    _getArticlesAndUpdate(_newArticlesSubject, await _getIds(StoriesType.newStories));
   }
 
   void close() {
     _storiesTypeController.close();
-  }
+  } 
 
-  _getArticlesAndUpdate(List<int> ids) {
+  _getArticlesAndUpdate(BehaviorSubject<UnmodifiableListView<Article>> subject, List<int> ids) {
     _isLoadingSubject.add(true);
     _updateArticles(ids).then((value) {
-      _articlesSubject.add(UnmodifiableListView(_articles));
+      subject.add(UnmodifiableListView(_articles));
       _isLoadingSubject.add(false);
     });
   }
