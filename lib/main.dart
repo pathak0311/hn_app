@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hn_app/src/hn_bloc.dart';
 import 'package:hn_app/src/prefs_bloc.dart';
+import 'package:hn_app/src/widgets/search.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'src/article.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   final hnBloc = HackerNewsBloc();
   final prefsBloc = PrefsBloc();
   runApp(MyApp(
@@ -49,7 +52,6 @@ class MyApp extends StatelessWidget {
                   fontSize: 10.0,
                   fontWeight: FontWeight.w800))),
       home: MyHomePage(
-        title: 'Flutter Hacker News',
         hackerNewsBloc: hackerNewsBloc,
         prefsBloc: prefsBloc,
       ),
@@ -62,12 +64,8 @@ class MyHomePage extends StatefulWidget {
   final PrefsBloc prefsBloc;
 
   const MyHomePage(
-      {Key? key,
-      required this.title,
-      required this.hackerNewsBloc,
-      required this.prefsBloc})
+      {Key? key, required this.hackerNewsBloc, required this.prefsBloc})
       : super(key: key);
-  final String title;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -81,52 +79,45 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         elevation: 0.0,
-        title: Text(widget.title),
+        title: const Text('Flutter Hacker News'),
         leading: LoadingInfo(isLoading: widget.hackerNewsBloc.isLoading),
         actions: [
-          Builder(builder: (context) {
-            return IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () async {
-                  final Article? result = await showSearch(
-                      context: context,
-                      delegate: ArticleSearch(_currentIndex == 0
-                          ? widget.hackerNewsBloc.topArticles
-                          : widget.hackerNewsBloc.newArticles));
+          IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () async {
+                final Article? result = await showSearch(
+                    context: context,
+                    delegate: ArticleSearch(_currentIndex == 0
+                        ? widget.hackerNewsBloc.topArticles
+                        : widget.hackerNewsBloc.newArticles));
 
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(result!.title!)));
-
-                  // launchUrl(Uri.parse(result.url!));
+                if (result != null) {
                   Navigator.push(
                       context,
                       MaterialPageRoute(
                           builder: (context) => HackerNewsWebPage(
                                 url: result.url!,
                               )));
-                });
-          })
+                }
+
+                // launchUrl(Uri.parse(result.url!));
+              })
         ],
       ),
-      body: (_currentIndex == 0)
-          ? StreamBuilder<UnmodifiableListView<Article>>(
-              stream: widget.hackerNewsBloc.topArticles,
-              initialData: UnmodifiableListView<Article>([]),
-              builder: (context, snapshot) {
-                return ListView(
-                  key: const PageStorageKey(0),
-                  children: snapshot.data!.map(_buildItem).toList(),
-                );
-              })
-          : StreamBuilder<UnmodifiableListView<Article>>(
-              stream: widget.hackerNewsBloc.newArticles,
-              initialData: UnmodifiableListView<Article>([]),
-              builder: (context, snapshot) {
-                return ListView(
-                  key: const PageStorageKey(1),
-                  children: snapshot.data!.map(_buildItem).toList(),
-                );
-              }),
+      body: StreamBuilder<UnmodifiableListView<Article>>(
+          stream: (_currentIndex == 0)
+              ? widget.hackerNewsBloc.topArticles
+              : widget.hackerNewsBloc.newArticles,
+          initialData: UnmodifiableListView<Article>([]),
+          builder: (context, snapshot) {
+            return ListView(
+              key: PageStorageKey(_currentIndex),
+              children: snapshot.data!
+                  .map((article) => _Item(
+                      article: article, prefsBloc: widget.prefsBloc))
+                  .toList(),
+            );
+          }),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         items: const [
@@ -137,9 +128,6 @@ class _MyHomePageState extends State<MyHomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings')
         ],
         onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
           if (index == 0) {
             widget.hackerNewsBloc.storiesType.add(StoriesType.topStories);
           } else if (index == 1) {
@@ -151,12 +139,24 @@ class _MyHomePageState extends State<MyHomePage> {
                   return PrefsSheet(prefsBloc: widget.prefsBloc);
                 });
           }
+          setState(() {
+            _currentIndex = index;
+          });
         },
       ),
     );
   }
+}
 
-  Widget _buildItem(Article article) {
+class _Item extends StatelessWidget {
+  final Article article;
+  final PrefsBloc prefsBloc;
+
+  const _Item({Key? key, required this.article, required this.prefsBloc})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       key: PageStorageKey(article.title!),
       padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
@@ -179,25 +179,22 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     IconButton(
                         icon: const Icon(Icons.launch),
-                        onPressed: () {
-                          // await launchUrl(Uri.parse(article.url!));
-                          Navigator.push(
+                        onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
                                   builder: (context) => HackerNewsWebPage(
-                                        url: article.url!,
-                                      )));
-                        })
+                                        url: article.url ?? 'https://flutter.dev/',
+                                      ))))
                   ],
                 ),
                 StreamBuilder<PrefsState>(
-                    stream: widget.prefsBloc.currentPrefs,
+                    stream: prefsBloc.currentPrefs,
                     builder: (context, snapshot) {
                       if (snapshot.hasData && snapshot.data!.showWebView) {
                         return SizedBox(
                             height: 200,
                             child: WebView(
-                              initialUrl: article.url!,
+                              initialUrl: article.url ?? 'https://flutter.dev/',
                               javascriptMode: JavascriptMode.unrestricted,
                               gestureRecognizers: <
                                   Factory<OneSequenceGestureRecognizer>>{}
@@ -253,103 +250,6 @@ class _LoadingInfoState extends State<LoadingInfo>
             );
           }
           return Container();
-        });
-  }
-}
-
-class ArticleSearch extends SearchDelegate<Article> {
-  final Stream<UnmodifiableListView<Article>> articles;
-
-  ArticleSearch(this.articles);
-
-  @override
-  List<Widget>? buildActions(BuildContext context) {
-    return [
-      IconButton(
-        icon: const Icon(Icons.clear),
-        onPressed: () {
-          query = '';
-        },
-      )
-    ];
-  }
-
-  @override
-  Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back),
-      onPressed: () {
-        close(context, Article());
-      },
-    );
-  }
-
-  @override
-  Widget buildResults(BuildContext context) {
-    return StreamBuilder<UnmodifiableListView<Article>>(
-        stream: articles,
-        builder: (BuildContext context,
-            AsyncSnapshot<UnmodifiableListView<Article>> snapshot) {
-          if (snapshot.hasData) {
-            final results = snapshot.data!.where((element) =>
-                element.title!.toLowerCase().contains(query.toLowerCase()));
-            return ListView(
-              children: results
-                  .map<ListTile>((article) => ListTile(
-                        title: Text(
-                          article.title!,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headline6!
-                              .copyWith(fontSize: 16),
-                        ),
-                        leading: const Icon(Icons.book),
-                        subtitle: Text(article.url!),
-                        onTap: () {
-                          // launchUrl(Uri.parse(article.url!));
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => HackerNewsWebPage(
-                                        url: article.url!,
-                                      )));
-                          close(context, article);
-                        },
-                      ))
-                  .toList(),
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
-        });
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    return StreamBuilder<UnmodifiableListView<Article>>(
-        stream: articles,
-        builder: (BuildContext context,
-            AsyncSnapshot<UnmodifiableListView<Article>> snapshot) {
-          if (snapshot.hasData) {
-            final results = snapshot.data!.where((element) =>
-                element.title!.toLowerCase().contains(query.toLowerCase()));
-            return ListView(
-              children: results
-                  .map<ListTile>((article) => ListTile(
-                        title: Text(
-                          article.title!,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headline6!
-                              .copyWith(fontSize: 16, color: Colors.blue),
-                        ),
-                        onTap: () {
-                          close(context, article);
-                        },
-                      ))
-                  .toList(),
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
         });
   }
 }
