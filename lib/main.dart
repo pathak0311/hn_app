@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:hn_app/src/hn_bloc.dart';
 import 'package:hn_app/src/prefs_bloc.dart';
+import 'package:hn_app/src/widgets/headline.dart';
 import 'package:hn_app/src/widgets/search.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -79,7 +80,11 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         elevation: 0.0,
-        title: const Text('Flutter Hacker News'),
+        title: Headline(
+            text: (_currentIndex == 0)
+                ? 'Flutter HackerNews: Top'
+                : 'Flutter HackerNews: New',
+            index: _currentIndex),
         leading: LoadingInfo(isLoading: widget.hackerNewsBloc.isLoading),
         actions: [
           IconButton(
@@ -113,8 +118,8 @@ class _MyHomePageState extends State<MyHomePage> {
             return ListView(
               key: PageStorageKey(_currentIndex),
               children: snapshot.data!
-                  .map((article) => _Item(
-                      article: article, prefsBloc: widget.prefsBloc))
+                  .map((article) =>
+                      _Item(article: article, prefsBloc: widget.prefsBloc))
                   .toList(),
             );
           }),
@@ -180,11 +185,12 @@ class _Item extends StatelessWidget {
                     IconButton(
                         icon: const Icon(Icons.launch),
                         onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => HackerNewsWebPage(
-                                        url: article.url ?? 'https://flutter.dev/',
-                                      ))))
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => HackerNewsWebPage(
+                                      url:
+                                          article.url ?? 'https://flutter.dev/',
+                                    ))))
                   ],
                 ),
                 StreamBuilder<PrefsState>(
