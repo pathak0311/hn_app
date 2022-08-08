@@ -5,28 +5,59 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hn_app/main.dart';
 import 'package:hn_app/src/hn_bloc.dart';
+import 'package:hn_app/src/widgets/headline.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    HackerNewsBloc bloc = HackerNewsBloc();
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp(hackerNewsBloc: bloc,));
+  testWidgets('headline animates and changes text correctly',
+      (WidgetTester tester) async {
+    String text = "Foo";
+    int index = 0;
+    Key buttonKey = GlobalKey();
+    Key headlineKey = GlobalKey();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    Widget widget = StatefulBuilder(
+      builder: (BuildContext context, void Function(void Function()) setState) {
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: Column(
+            children: <Widget>[
+              Headline(
+                key: headlineKey,
+                text: text,
+                index: index,
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    text = 'Bar';
+                    index = 1;
+                  });
+                },
+                child: Text("Tap"),
+                key: buttonKey,
+              )
+            ],
+          ),
+        );
+      },
+    );
+    await tester.pumpWidget(widget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(find.text('Foo'), findsOneWidget);
+
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
-  }, skip: true);
+    await tester.tap(find.byKey(buttonKey));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bar'), findsOneWidget);
+  });
 }
