@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hn_app/main.dart';
-import 'package:hn_app/src/hn_bloc.dart';
+import 'package:hn_app/src/notifiers/hn_api.dart';
 import 'package:hn_app/src/widgets/headline.dart';
 
 void main() {

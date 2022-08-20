@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const Duration headlineAnimationDuration = Duration(milliseconds: 600);
+const Duration headlineAnimationDuration = Duration(milliseconds: 400);
 
 class Headline extends ImplicitlyAnimatedWidget {
   final String text;

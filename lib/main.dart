@@ -1,35 +1,33 @@
-import 'dart:collection';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:hn_app/src/hn_bloc.dart';
-import 'package:hn_app/src/prefs_bloc.dart';
+import 'package:hn_app/src/notifiers/hn_api.dart';
+import 'package:hn_app/src/notifiers/prefs.dart';
 import 'package:hn_app/src/widgets/headline.dart';
+import 'package:hn_app/src/widgets/loading_info.dart';
 import 'package:hn_app/src/widgets/search.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'src/article.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  final hnBloc = HackerNewsBloc();
-  final prefsBloc = PrefsBloc();
-  runApp(MyApp(
-    hackerNewsBloc: hnBloc,
-    prefsBloc: prefsBloc,
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider<LoadingTabsCount>(
+        create: (_) => LoadingTabsCount(),
+      ),
+      ChangeNotifierProvider(
+        create: (context) => HackerNewsNotifier(
+            Provider.of<LoadingTabsCount>(context, listen: false)),
+      ),
+      ChangeNotifierProvider(create: (_) => PrefsNotifier())
+    ],
+    child: MyApp(),
   ));
 }
 
 class MyApp extends StatelessWidget {
-  final HackerNewsBloc hackerNewsBloc;
-  final PrefsBloc prefsBloc;
-
-  const MyApp({Key? key, required this.hackerNewsBloc, required this.prefsBloc})
-      : super(key: key);
-
   static const primaryColor = Colors.white;
 
   @override
@@ -52,49 +50,61 @@ class MyApp extends StatelessWidget {
                   fontFamily: 'Garamond',
                   fontSize: 10.0,
                   fontWeight: FontWeight.w800))),
-      home: MyHomePage(
-        hackerNewsBloc: hackerNewsBloc,
-        prefsBloc: prefsBloc,
-      ),
+      home: MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  final HackerNewsBloc hackerNewsBloc;
-  final PrefsBloc prefsBloc;
-
-  const MyHomePage(
-      {Key? key, required this.hackerNewsBloc, required this.prefsBloc})
-      : super(key: key);
-
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   int _currentIndex = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    _pageController.addListener(_handlePageChange);
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _pageController.removeListener(_handlePageChange);
+    super.dispose();
+  }
+
+  void _handlePageChange() {
+    setState(() {
+      _currentIndex = _pageController.page!.round();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hn = Provider.of<HackerNewsNotifier>(context);
+    final tabs = hn.tabs;
+    final current = tabs[_currentIndex];
+
+    if (current.articles.isEmpty && !current.isLoading) {
+      // New tab with no data. Let's fetch some.
+      current.refresh();
+    }
+
     return Scaffold(
       appBar: AppBar(
         elevation: 0.0,
-        title: Headline(
-            text: (_currentIndex == 0)
-                ? 'Flutter HackerNews: Top'
-                : 'Flutter HackerNews: New',
-            index: _currentIndex),
-        leading: LoadingInfo(isLoading: widget.hackerNewsBloc.isLoading),
+        title: Headline(text: tabs[_currentIndex].name, index: _currentIndex),
+        leading: Consumer<LoadingTabsCount>(
+            builder: (context, loading, child) => LoadingInfo(loading)),
         actions: [
           IconButton(
               icon: const Icon(Icons.search),
               onPressed: () async {
                 final Article? result = await showSearch(
-                    context: context,
-                    delegate: ArticleSearch(_currentIndex == 0
-                        ? widget.hackerNewsBloc.topArticles
-                        : widget.hackerNewsBloc.newArticles));
+                    context: context, delegate: ArticleSearch(hn.allArticles));
 
                 if (result != null) {
                   Navigator.push(
@@ -109,41 +119,27 @@ class _MyHomePageState extends State<MyHomePage> {
               })
         ],
       ),
-      body: StreamBuilder<UnmodifiableListView<Article>>(
-          stream: (_currentIndex == 0)
-              ? widget.hackerNewsBloc.topArticles
-              : widget.hackerNewsBloc.newArticles,
-          initialData: UnmodifiableListView<Article>([]),
-          builder: (context, snapshot) {
-            return ListView(
-              key: PageStorageKey(_currentIndex),
-              children: snapshot.data!
-                  .map((article) =>
-                      _Item(article: article, prefsBloc: widget.prefsBloc))
-                  .toList(),
-            );
-          }),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: tabs.length,
+        itemBuilder: (context, index) => ChangeNotifierProvider.value(
+          value: tabs[index],
+          child: _TabPage(index),
+        ),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.arrow_drop_up), label: 'Top Stories'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.new_releases), label: 'New Stories'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings')
+        items: [
+          for (final tab in tabs)
+            BottomNavigationBarItem(
+              label: tab.name,
+              icon: Icon(tab.icon),
+            )
         ],
         onTap: (index) {
-          if (index == 0) {
-            widget.hackerNewsBloc.storiesType.add(StoriesType.topStories);
-          } else if (index == 1) {
-            widget.hackerNewsBloc.storiesType.add(StoriesType.newStories);
-          } else if (index == 2) {
-            showModalBottomSheet(
-                context: context,
-                builder: (context) {
-                  return PrefsSheet(prefsBloc: widget.prefsBloc);
-                });
-          }
+          _pageController.animateToPage(index,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic);
           setState(() {
             _currentIndex = index;
           });
@@ -155,13 +151,16 @@ class _MyHomePageState extends State<MyHomePage> {
 
 class _Item extends StatelessWidget {
   final Article article;
-  final PrefsBloc prefsBloc;
+  final PrefsNotifier prefs;
 
-  const _Item({Key? key, required this.article, required this.prefsBloc})
+  const _Item({Key? key, required this.article, required this.prefs})
       : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final prefs = Provider.of<PrefsNotifier>(context);
+
+    assert(article.title != null);
     return Padding(
       key: PageStorageKey(article.title!),
       padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
@@ -193,24 +192,18 @@ class _Item extends StatelessWidget {
                                     ))))
                   ],
                 ),
-                StreamBuilder<PrefsState>(
-                    stream: prefsBloc.currentPrefs,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData && snapshot.data!.showWebView) {
-                        return SizedBox(
-                            height: 200,
-                            child: WebView(
-                              initialUrl: article.url ?? 'https://flutter.dev/',
-                              javascriptMode: JavascriptMode.unrestricted,
-                              gestureRecognizers: <
-                                  Factory<OneSequenceGestureRecognizer>>{}
-                                ..add(Factory<VerticalDragGestureRecognizer>(
-                                    () => VerticalDragGestureRecognizer())),
-                            ));
-                      } else {
-                        return Container();
-                      }
-                    })
+                prefs.showWebView
+                    ? SizedBox(
+                        height: 200,
+                        child: WebView(
+                          javascriptMode: JavascriptMode.unrestricted,
+                          initialUrl: article.url,
+                          gestureRecognizers: Set()
+                            ..add(Factory<VerticalDragGestureRecognizer>(
+                                () => VerticalDragGestureRecognizer())),
+                        ),
+                      )
+                    : Container(),
               ],
             ),
           )
@@ -220,43 +213,38 @@ class _Item extends StatelessWidget {
   }
 }
 
-class LoadingInfo extends StatefulWidget {
-  final Stream<bool> isLoading;
+class _TabPage extends StatelessWidget {
+  final int index;
 
-  const LoadingInfo({Key? key, required this.isLoading}) : super(key: key);
-
-  @override
-  State<LoadingInfo> createState() => _LoadingInfoState();
-}
-
-class _LoadingInfoState extends State<LoadingInfo>
-    with TickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 1));
-  }
+  _TabPage(this.index, {Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
-        stream: widget.isLoading,
-        builder: (BuildContext context, AsyncSnapshot<bool> loading) {
-          if (loading.hasData && loading.data!) {
-            _controller.forward().then((f) {
-              _controller.reverse();
-            });
-            return FadeTransition(
-              opacity: Tween(begin: 0.5, end: 1.0).animate(
-                  CurvedAnimation(parent: _controller, curve: Curves.easeIn)),
-              child: const Icon(FontAwesomeIcons.hackerNewsSquare),
-            );
-          }
-          return Container();
-        });
+    final tab = Provider.of<HackerNewsTab>(context);
+    final articles = tab.articles;
+    final prefs = Provider.of<PrefsNotifier>(context);
+
+    if (tab.isLoading && articles.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    return RefreshIndicator(
+      color: Colors.white,
+      backgroundColor: Colors.black,
+      onRefresh: () => tab.refresh(),
+      child: ListView(
+        key: PageStorageKey(index),
+        children: [
+          for (final article in articles)
+            _Item(
+              article: article,
+              prefs: prefs,
+            )
+        ],
+      ),
+    );
   }
 }
 
@@ -271,15 +259,35 @@ class HackerNewsWebPage extends StatelessWidget {
       appBar: AppBar(title: Text('Web Page')),
       body: WebView(
         initialUrl: url,
+        javascriptMode: JavascriptMode.unrestricted,
+      ),
+    );
+  }
+}
+
+class HackerNewsCommentPage extends StatelessWidget {
+  final int id;
+
+  HackerNewsCommentPage(this.id);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Comments'),
+      ),
+      body: WebView(
+        initialUrl: 'https://news.ycombinator.com/item?id=$id',
+        javascriptMode: JavascriptMode.unrestricted,
       ),
     );
   }
 }
 
 class PrefsSheet extends StatefulWidget {
-  final PrefsBloc prefsBloc;
+  final PrefsNotifier prefs;
 
-  const PrefsSheet({Key? key, required this.prefsBloc}) : super(key: key);
+  const PrefsSheet({Key? key, required this.prefs}) : super(key: key);
 
   @override
   State<PrefsSheet> createState() => _PrefsSheetState();
@@ -289,17 +297,17 @@ class _PrefsSheetState extends State<PrefsSheet> {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: StreamBuilder<PrefsState>(
-          stream: widget.prefsBloc.currentPrefs,
-          builder: (BuildContext context, AsyncSnapshot<PrefsState> snapshot) {
-            return snapshot.hasData
-                ? Switch(
-                    value: snapshot.data!.showWebView,
-                    onChanged: (value) {
-                      widget.prefsBloc.showWebViewPref.add(value);
-                    })
-                : Text('Nothing');
-          }),
+      // child: StreamBuilder<PrefsState>(
+      //     stream: widget.prefs._,
+      //     builder: (BuildContext context, AsyncSnapshot<PrefsState> snapshot) {
+      //       return snapshot.hasData
+      //           ? Switch(
+      //               value: snapshot.data!.showWebView,
+      //               onChanged: (value) {
+      //                 widget.prefs.showWebView.add(value);
+      //               })
+      //           : Text('Nothing');
+      //     }),
     );
   }
 }

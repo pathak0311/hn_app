@@ -16,6 +16,7 @@ dependencies:
   rxdart: ^0.27.4
   font_awesome_flutter: ^10.1.0
   webview_flutter: ^3.0.4
+  provider: ^6.0.3
   shared_preferences: ^2.0.15
   flutter:
     sdk: flutter

@@ -6,7 +6,7 @@ import '../../main.dart';
 import '../article.dart';
 
 class ArticleSearch extends SearchDelegate<Article> {
-  final Stream<UnmodifiableListView<Article>> articles;
+  final UnmodifiableListView<Article> articles;
 
   ArticleSearch(this.articles);
 
@@ -34,16 +34,12 @@ class ArticleSearch extends SearchDelegate<Article> {
 
   @override
   Widget buildResults(BuildContext context) {
-    return StreamBuilder<UnmodifiableListView<Article>>(
-        stream: articles,
-        builder: (BuildContext context,
-            AsyncSnapshot<UnmodifiableListView<Article>> snapshot) {
-          if (snapshot.hasData) {
-            final results = snapshot.data!.where((element) =>
-                element.title!.toLowerCase().contains(query.toLowerCase()));
-            return ListView(
-              children: results
-                  .map<ListTile>((article) => ListTile(
+    var results = articles
+        .where((a) => a.title!.toLowerCase().contains(query.toLowerCase()));
+
+    return ListView(
+      children: results
+          .map<ListTile>((article) => ListTile(
                 title: Text(
                   article.title!,
                   style: Theme.of(context)
@@ -59,30 +55,23 @@ class ArticleSearch extends SearchDelegate<Article> {
                       context,
                       MaterialPageRoute(
                           builder: (context) => HackerNewsWebPage(
-                            url: article.url!,
-                          )));
+                                url: article.url!,
+                              )));
                   close(context, article);
                 },
               ))
-                  .toList(),
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
-        });
+          .toList(),
+    );
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    return StreamBuilder<UnmodifiableListView<Article>>(
-        stream: articles,
-        builder: (BuildContext context,
-            AsyncSnapshot<UnmodifiableListView<Article>> snapshot) {
-          if (snapshot.hasData) {
-            final results = snapshot.data!.where((element) =>
-                element.title!.toLowerCase().contains(query.toLowerCase()));
-            return ListView(
-              children: results
-                  .map<ListTile>((article) => ListTile(
+    final results = articles
+        .where((a) => a.title!.toLowerCase().contains(query.toLowerCase()));
+
+    return ListView(
+      children: results
+          .map<ListTile>((article) => ListTile(
                 title: Text(
                   article.title!,
                   style: Theme.of(context)
@@ -94,10 +83,7 @@ class ArticleSearch extends SearchDelegate<Article> {
                   close(context, article);
                 },
               ))
-                  .toList(),
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
-        });
+          .toList(),
+    );
   }
 }
