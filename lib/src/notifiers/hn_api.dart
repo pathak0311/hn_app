@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hn_app/src/article.dart';
@@ -90,10 +91,21 @@ class HackerNewsTab with ChangeNotifier {
   Future<List<int>> _getIds(StoriesType type) async {
     final partUrl = (type == StoriesType.topStories) ? 'top' : 'new';
     final url = "$_baseURL${partUrl}stories.json";
-    final response = await get(Uri.parse(url));
+    // final response = await get(Uri.parse(url));
+    var error =
+        () => throw HackerNewsApiException('Stories $type can\' be fetched.');
+
+    var response;
+
+    try {
+      response = await get(Uri.parse(url));
+    } on SocketException {
+      error();
+    }
 
     if (response.statusCode != 200) {
-      throw HackerNewsApiException('Stories $type can\' be fetched.');
+      // throw HackerNewsApiException('Stories $type can\' be fetched.');
+      error();
     }
 
     return parseTopStories(response.body).take(10).toList();

@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:hn_app/src/favorites.dart';
 import 'package:hn_app/src/notifiers/hn_api.dart';
 import 'package:hn_app/src/notifiers/prefs.dart';
+import 'package:hn_app/src/pages/favorites.dart';
+import 'package:hn_app/src/pages/settings.dart';
 import 'package:hn_app/src/widgets/headline.dart';
 import 'package:hn_app/src/widgets/loading_info.dart';
 import 'package:hn_app/src/widgets/search.dart';
@@ -14,9 +17,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(MultiProvider(
     providers: [
-      ChangeNotifierProvider<LoadingTabsCount>(
+      ListenableProvider<LoadingTabsCount>(
         create: (_) => LoadingTabsCount(),
+        dispose: (_, value) => value.dispose(),
       ),
+      Provider<MyDatabase>(create: (_) => MyDatabase()),
       ChangeNotifierProvider(
         create: (context) => HackerNewsNotifier(
             Provider.of<LoadingTabsCount>(context, listen: false)),
@@ -33,25 +38,25 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-          scaffoldBackgroundColor: primaryColor,
-          appBarTheme: const AppBarTheme(
-              backgroundColor: primaryColor,
-              titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
-              iconTheme: IconThemeData(color: Colors.black)),
-          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-              backgroundColor: Colors.black,
-              selectedItemColor: primaryColor,
-              unselectedItemColor: Colors.white54),
-          textTheme: Theme.of(context).textTheme.copyWith(
-              caption: const TextStyle(color: Colors.white54),
-              subtitle1: const TextStyle(
-                  fontFamily: 'Garamond',
-                  fontSize: 10.0,
-                  fontWeight: FontWeight.w800))),
-      home: MyHomePage(),
-    );
+        title: 'Flutter Demo',
+        theme: ThemeData(
+            scaffoldBackgroundColor: primaryColor,
+            appBarTheme: const AppBarTheme(
+                backgroundColor: primaryColor,
+                titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
+                iconTheme: IconThemeData(color: Colors.black)),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+                backgroundColor: Colors.black,
+                selectedItemColor: primaryColor,
+                unselectedItemColor: Colors.white54),
+            textTheme: Theme.of(context).textTheme.copyWith(
+                caption: const TextStyle(color: Colors.white54),
+                subtitle1: const TextStyle(
+                    fontFamily: 'Garamond',
+                    fontSize: 10.0,
+                    fontWeight: FontWeight.w800))),
+        home: MyHomePage(),
+        routes: {'/settings': (context) => const SettingsPage()});
   }
 }
 
@@ -59,6 +64,8 @@ class MyHomePage extends StatefulWidget {
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
+
+GlobalKey<NavigatorState> _pageNavigatorKey = GlobalKey<NavigatorState>();
 
 class _MyHomePageState extends State<MyHomePage> {
   int _currentIndex = 0;
@@ -90,15 +97,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (current.articles.isEmpty && !current.isLoading) {
       // New tab with no data. Let's fetch some.
-      current.refresh();
+      Future(() => current.refresh());
     }
 
     return Scaffold(
       appBar: AppBar(
         elevation: 0.0,
         title: Headline(text: tabs[_currentIndex].name, index: _currentIndex),
+        // leading: Consumer<LoadingTabsCount>(
+        //     builder: (context, loading, child) => LoadingInfo(loading)),
         leading: Consumer<LoadingTabsCount>(
-            builder: (context, loading, child) => LoadingInfo(loading)),
+          builder: (context, loading, child) {
+            bool isLoading = loading.value > 0;
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              child: isLoading
+                  ? LoadingInfo(loading)
+                  : IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+            );
+          },
+        ),
         actions: [
           IconButton(
               icon: const Icon(Icons.search),
@@ -119,13 +140,43 @@ class _MyHomePageState extends State<MyHomePage> {
               })
         ],
       ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: tabs.length,
-        itemBuilder: (context, index) => ChangeNotifierProvider.value(
-          value: tabs[index],
-          child: _TabPage(index),
-        ),
+      drawer: Drawer(
+          child: ListView(
+        children: [
+          const DrawerHeader(child: Text('HN App')),
+          ListTile(
+            title: Text('Favorites'),
+            onTap: () {
+              _pageNavigatorKey.currentState
+                  ?.pushReplacementNamed('/favorites');
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            title: const Text('Settings'),
+            onTap: () => Navigator.of(context).pushNamed('/settings'),
+          ),
+        ],
+      )),
+      body: Navigator(
+        key: _pageNavigatorKey,
+        onGenerateRoute: (settings) {
+          if(settings.name == '/favorites'){
+            return MaterialPageRoute(builder: (context) {
+              return const FavoritesPage();
+            });
+          }
+          return MaterialPageRoute(builder: (context) {
+          return PageView.builder(
+            controller: _pageController,
+            itemCount: tabs.length,
+            itemBuilder: (context, index) => ChangeNotifierProvider.value(
+              value: tabs[index],
+              child: _TabPage(index),
+            ),
+          );
+        });
+        },
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -159,54 +210,74 @@ class _Item extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prefs = Provider.of<PrefsNotifier>(context);
+    var myDatabase = Provider.of<MyDatabase>(context);
 
     assert(article.title != null);
     return Padding(
       key: PageStorageKey(article.title!),
       padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
-      child: ExpansionTile(
-        title: Text(
-          article.title!,
-          style: const TextStyle(fontSize: 24.0),
-        ),
+      child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+          ExpansionTile(
+            leading: StreamBuilder<bool>(
+              stream: myDatabase.isFavorite(article.id),
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data!) {
+                  return IconButton(
+                    icon: const Icon(Icons.star),
+                    onPressed: () => myDatabase.removeFavorite(article.id),
+                  );
+                }
+                return IconButton(
+                  icon: const Icon(Icons.star_border),
+                  onPressed: () => myDatabase.addFavorite(article),
+                );
+              },
+            ),
+            title: Text(
+              article.title!,
+              style: const TextStyle(fontSize: 24.0),
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
                   children: [
-                    Text('${article.descendants} Comments'),
-                    const SizedBox(
-                      width: 16.0,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text('${article.descendants} Comments'),
+                        const SizedBox(
+                          width: 16.0,
+                        ),
+                        IconButton(
+                            icon: const Icon(Icons.launch),
+                            onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => HackerNewsWebPage(
+                                          url: article.url ??
+                                              'https://flutter.dev/',
+                                        ))))
+                      ],
                     ),
-                    IconButton(
-                        icon: const Icon(Icons.launch),
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => HackerNewsWebPage(
-                                      url:
-                                          article.url ?? 'https://flutter.dev/',
-                                    ))))
+                    prefs.showWebView
+                        ? SizedBox(
+                            height: 200,
+                            child: WebView(
+                              javascriptMode: JavascriptMode.unrestricted,
+                              initialUrl: article.url,
+                              gestureRecognizers: Set()
+                                ..add(Factory<VerticalDragGestureRecognizer>(
+                                    () => VerticalDragGestureRecognizer())),
+                            ),
+                          )
+                        : Container(),
                   ],
                 ),
-                prefs.showWebView
-                    ? SizedBox(
-                        height: 200,
-                        child: WebView(
-                          javascriptMode: JavascriptMode.unrestricted,
-                          initialUrl: article.url,
-                          gestureRecognizers: Set()
-                            ..add(Factory<VerticalDragGestureRecognizer>(
-                                () => VerticalDragGestureRecognizer())),
-                        ),
-                      )
-                    : Container(),
-              ],
-            ),
-          )
+              )
+            ],
+          ),
         ],
       ),
     );
@@ -216,7 +287,7 @@ class _Item extends StatelessWidget {
 class _TabPage extends StatelessWidget {
   final int index;
 
-  _TabPage(this.index, {Key? key}) : super(key: key);
+  const _TabPage(this.index, {Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +296,7 @@ class _TabPage extends StatelessWidget {
     final prefs = Provider.of<PrefsNotifier>(context);
 
     if (tab.isLoading && articles.isEmpty) {
-      return Center(
+      return const Center(
         child: CircularProgressIndicator(),
       );
     }
@@ -256,7 +327,7 @@ class HackerNewsWebPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Web Page')),
+      appBar: AppBar(title: const Text('Web Page')),
       body: WebView(
         initialUrl: url,
         javascriptMode: JavascriptMode.unrestricted,
@@ -268,13 +339,13 @@ class HackerNewsWebPage extends StatelessWidget {
 class HackerNewsCommentPage extends StatelessWidget {
   final int id;
 
-  HackerNewsCommentPage(this.id);
+  const HackerNewsCommentPage({Key? key, required this.id}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Comments'),
+        title: const Text('Comments'),
       ),
       body: WebView(
         initialUrl: 'https://news.ycombinator.com/item?id=$id',
@@ -296,18 +367,18 @@ class PrefsSheet extends StatefulWidget {
 class _PrefsSheetState extends State<PrefsSheet> {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      // child: StreamBuilder<PrefsState>(
-      //     stream: widget.prefs._,
-      //     builder: (BuildContext context, AsyncSnapshot<PrefsState> snapshot) {
-      //       return snapshot.hasData
-      //           ? Switch(
-      //               value: snapshot.data!.showWebView,
-      //               onChanged: (value) {
-      //                 widget.prefs.showWebView.add(value);
-      //               })
-      //           : Text('Nothing');
-      //     }),
-    );
+    return const Center(
+        // child: StreamBuilder<PrefsState>(
+        //     stream: widget.prefs._,
+        //     builder: (BuildContext context, AsyncSnapshot<PrefsState> snapshot) {
+        //       return snapshot.hasData
+        //           ? Switch(
+        //               value: snapshot.data!.showWebView,
+        //               onChanged: (value) {
+        //                 widget.prefs.showWebView.add(value);
+        //               })
+        //           : Text('Nothing');
+        //     }),
+        );
   }
 }
