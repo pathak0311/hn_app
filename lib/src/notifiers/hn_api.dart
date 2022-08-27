@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hn_app/src/article.dart';
+import 'package:hn_app/src/notifiers/worker.dart';
 import 'package:http/http.dart';
 
 Map<int, Article> _cachedArticles = {};
@@ -38,8 +41,9 @@ class HackerNewsNotifier with ChangeNotifier {
   }
 
   /// Articles from all tabs. De-duplicated.
-  UnmodifiableListView<Article> get allArticles => UnmodifiableListView(
-      _tabs.expand((tab) => tab.articles).toSet().toList(growable: false));
+  UnmodifiableListView<Article> get allArticles =>
+      UnmodifiableListView(
+          _tabs.expand((tab) => tab.articles).toSet().toList(growable: false));
 
   UnmodifiableListView<HackerNewsTab> get tabs => UnmodifiableListView(_tabs);
 }
@@ -66,34 +70,25 @@ class HackerNewsTab with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     loadingTabsCount.value += 1;
+    
+    final worker = Worker();
+    await worker.isReady;
 
-    final ids = await _getIds(storiesType);
-    _articles = await _updateArticles(ids);
+    _articles = await worker.fetch(storiesType);
     _isLoading = false;
+
+    worker.dispose();
+
     notifyListeners();
     loadingTabsCount.value -= 1;
-  }
-
-  Future<Article> _getArticle(int id) async {
-    if (!_cachedArticles.containsKey(id)) {
-      final storyUrl = "${_baseURL}item/$id.json";
-      final storyRes = await get(Uri.parse(storyUrl));
-      if (storyRes.statusCode == 200) {
-        _cachedArticles[id] = parseArticle(storyRes.body);
-      } else {
-        throw HackerNewsApiException('Article $id couldn\'t be fetched');
-      }
-    }
-
-    return _cachedArticles[id] ?? Article();
   }
 
   Future<List<int>> _getIds(StoriesType type) async {
     final partUrl = (type == StoriesType.topStories) ? 'top' : 'new';
     final url = "$_baseURL${partUrl}stories.json";
     // final response = await get(Uri.parse(url));
-    var error =
-        () => throw HackerNewsApiException('Stories $type can\' be fetched.');
+    var error = () =>
+    throw HackerNewsApiException(300, 'Stories $type can\' be fetched.');
 
     var response;
 
@@ -108,19 +103,17 @@ class HackerNewsTab with ChangeNotifier {
       error();
     }
 
-    return parseTopStories(response.body).take(10).toList();
-  }
+    // var result = await compute<String, List<int>>(parseStoryIds, response.body);
 
-  Future<List<Article>> _updateArticles(List<int> articleIds) async {
-    final futureArticles = articleIds.map((id) => _getArticle(id));
-    final all = await Future.wait(futureArticles);
-    final filtered = all.where((article) => article.title != null).toList();
-    return filtered;
+    var result = parseStoryIds(response.body);
+
+    return result.take(10).toList();
   }
 }
 
 class HackerNewsApiException implements Exception {
+  final int statusCode;
   final String message;
 
-  HackerNewsApiException(this.message);
+  HackerNewsApiException(this.statusCode, this.message);
 }

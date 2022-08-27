@@ -30,7 +30,7 @@ abstract class Article implements Built<Article, ArticleBuilder> {
   factory Article([void Function(ArticleBuilder) updates]) = _$Article;
 }
 
-List<int> parseTopStories(String json) {
+List<int> parseStoryIds(String json) {
   final parsed = jsonDecode(json);
   final listOfIds = List<int>.from(parsed);
   return listOfIds;
