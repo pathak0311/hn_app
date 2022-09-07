@@ -1,8 +1,8 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:hn_app/src/widgets/webpage.dart';
 
-import '../../main.dart';
 import '../article.dart';
 
 class ArticleSearch extends SearchDelegate<Article> {

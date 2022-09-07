@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:hn_app/src/article.dart';
 import 'package:hn_app/src/notifiers/worker.dart';
 import 'package:http/http.dart';
+import 'package:logging/logging.dart';
 
 Map<int, Article> _cachedArticles = {};
 
@@ -21,7 +22,11 @@ class LoadingTabsCount extends ValueNotifier<int> {
 class HackerNewsNotifier with ChangeNotifier {
   late List<HackerNewsTab> _tabs;
 
+  static final _log = Logger('HackerNewsNotifier');
+
   HackerNewsNotifier(LoadingTabsCount loading) {
+    _log.fine('constructor called');
+
     _tabs = [
       HackerNewsTab(
         StoriesType.topStories,
@@ -37,13 +42,15 @@ class HackerNewsNotifier with ChangeNotifier {
       ),
     ];
 
-    scheduleMicrotask(() => _tabs.first.refresh());
+    scheduleMicrotask(() {
+      _log.fine('First refresh of first tab called.');
+      _tabs.first.refresh();
+    });
   }
 
   /// Articles from all tabs. De-duplicated.
-  UnmodifiableListView<Article> get allArticles =>
-      UnmodifiableListView(
-          _tabs.expand((tab) => tab.articles).toSet().toList(growable: false));
+  UnmodifiableListView<Article> get allArticles => UnmodifiableListView(
+      _tabs.expand((tab) => tab.articles).toSet().toList(growable: false));
 
   UnmodifiableListView<HackerNewsTab> get tabs => UnmodifiableListView(_tabs);
 }
@@ -70,7 +77,7 @@ class HackerNewsTab with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     loadingTabsCount.value += 1;
-    
+
     final worker = Worker();
     await worker.isReady;
 
@@ -88,7 +95,7 @@ class HackerNewsTab with ChangeNotifier {
     final url = "$_baseURL${partUrl}stories.json";
     // final response = await get(Uri.parse(url));
     var error = () =>
-    throw HackerNewsApiException(300, 'Stories $type can\' be fetched.');
+        throw HackerNewsApiException(300, 'Stories $type can\' be fetched.');
 
     var response;
 

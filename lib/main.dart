@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:hn_app/src/favorites.dart';
 import 'package:hn_app/src/notifiers/hn_api.dart';
 import 'package:hn_app/src/notifiers/prefs.dart';
@@ -9,11 +10,16 @@ import 'package:hn_app/src/pages/settings.dart';
 import 'package:hn_app/src/widgets/headline.dart';
 import 'package:hn_app/src/widgets/loading_info.dart';
 import 'package:hn_app/src/widgets/search.dart';
+import 'package:hn_app/src/widgets/webpage.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'src/article.dart';
 
 void main() {
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((event) {});
+
   WidgetsFlutterBinding.ensureInitialized();
   runApp(MultiProvider(
     providers: [
@@ -37,26 +43,58 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ThemeData lightThemeData = ThemeData(
+        scaffoldBackgroundColor: primaryColor,
+        appBarTheme: const AppBarTheme(
+            backgroundColor: primaryColor,
+            titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
+            iconTheme: IconThemeData(color: Colors.black)),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+            backgroundColor: Colors.black,
+            selectedItemColor: primaryColor,
+            unselectedItemColor: Colors.white54),
+        textTheme: TextTheme(
+            caption: const TextStyle(color: Colors.white54),
+            subtitle1: GoogleFonts.boogaloo(fontSize: 26),
+            button: GoogleFonts.boogaloo(fontSize: 18)));
     return MaterialApp(
-        title: 'Flutter Demo',
-        theme: ThemeData(
-            scaffoldBackgroundColor: primaryColor,
-            appBarTheme: const AppBarTheme(
-                backgroundColor: primaryColor,
-                titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
-                iconTheme: IconThemeData(color: Colors.black)),
-            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-                backgroundColor: Colors.black,
-                selectedItemColor: primaryColor,
-                unselectedItemColor: Colors.white54),
-            textTheme: Theme.of(context).textTheme.copyWith(
-                caption: const TextStyle(color: Colors.white54),
-                subtitle1: const TextStyle(
-                    fontFamily: 'Garamond',
-                    fontSize: 10.0,
-                    fontWeight: FontWeight.w800))),
-        home: MyHomePage(),
-        routes: {'/settings': (context) => const SettingsPage()});
+      title: 'Flutter Demo',
+      darkTheme: Provider.of<PrefsNotifier>(context).userDarkMode
+          ? ThemeData.dark()
+          : lightThemeData,
+      theme: lightThemeData,
+      home: MyHomePage(),
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(builder: (context) => MyHomePage());
+          case '/favorites':
+            return PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) {
+              return const FavoritesPage();
+            });
+          case '/settings':
+            return PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) {
+              return SettingsPage(initialAnimation: animation);
+            }, transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                    scale: animation.drive(
+                      Tween(begin: 1.3, end: 1.0).chain(
+                        CurveTween(curve: Curves.easeOutCubic),
+                      ),
+                    ),
+                    child: child),
+              );
+            });
+          default:
+            throw UnimplementedError('no route for $settings');
+        }
+      },
+    );
   }
 }
 
@@ -84,21 +122,27 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _handlePageChange() {
-    setState(() {
-      _currentIndex = _pageController.page!.round();
-    });
+    final newIndex = _pageController.page!.round();
+
+    if (_currentIndex != newIndex) {
+      setState(() {
+        _currentIndex = newIndex;
+      });
+
+      final hn = Provider.of<HackerNewsNotifier>(context);
+      final tabs = hn.tabs;
+      final current = tabs[_currentIndex];
+
+      if (current.articles.isEmpty && !current.isLoading) {
+        current.refresh();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final hn = Provider.of<HackerNewsNotifier>(context);
     final tabs = hn.tabs;
-    final current = tabs[_currentIndex];
-
-    if (current.articles.isEmpty && !current.isLoading) {
-      // New tab with no data. Let's fetch some.
-      Future(() => current.refresh());
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -145,37 +189,39 @@ class _MyHomePageState extends State<MyHomePage> {
         children: [
           const DrawerHeader(child: Text('HN App')),
           ListTile(
-            title: Text('Favorites'),
+            title: const Text('Favorites'),
             onTap: () {
-              _pageNavigatorKey.currentState
-                  ?.pushReplacementNamed('/favorites');
               Navigator.pop(context);
+              Navigator.pushNamed(context, '/favorites');
             },
           ),
           ListTile(
             title: const Text('Settings'),
-            onTap: () => Navigator.of(context).pushNamed('/settings'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/settings');
+            },
           ),
         ],
       )),
       body: Navigator(
         key: _pageNavigatorKey,
         onGenerateRoute: (settings) {
-          if(settings.name == '/favorites'){
+          if (settings.name == '/favorites') {
             return MaterialPageRoute(builder: (context) {
               return const FavoritesPage();
             });
           }
           return MaterialPageRoute(builder: (context) {
-          return PageView.builder(
-            controller: _pageController,
-            itemCount: tabs.length,
-            itemBuilder: (context, index) => ChangeNotifierProvider.value(
-              value: tabs[index],
-              child: _TabPage(index),
-            ),
-          );
-        });
+            return PageView.builder(
+              controller: _pageController,
+              itemCount: tabs.length,
+              itemBuilder: (context, index) => ChangeNotifierProvider.value(
+                value: tabs[index],
+                child: _TabPage(index),
+              ),
+            );
+          });
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -234,10 +280,7 @@ class _Item extends StatelessWidget {
                 );
               },
             ),
-            title: Text(
-              article.title!,
-              style: const TextStyle(fontSize: 24.0),
-            ),
+            title: Text(article.title!),
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -246,7 +289,18 @@ class _Item extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        Text('${article.descendants} Comments'),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 46),
+                          child: TextButton(
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          HackerNewsCommentPage(
+                                            id: article.id,
+                                          ))),
+                              child: Text('${article.descendants} Comments')),
+                        ),
                         const SizedBox(
                           width: 16.0,
                         ),
@@ -314,23 +368,6 @@ class _TabPage extends StatelessWidget {
               prefs: prefs,
             )
         ],
-      ),
-    );
-  }
-}
-
-class HackerNewsWebPage extends StatelessWidget {
-  final String url;
-
-  const HackerNewsWebPage({Key? key, required this.url}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Web Page')),
-      body: WebView(
-        initialUrl: url,
-        javascriptMode: JavascriptMode.unrestricted,
       ),
     );
   }
