@@ -51,9 +51,6 @@ class MyDatabase extends _$MyDatabase {
   Stream<bool> isFavorite(int id) {
     return select(favorites).watch().map((favoritesList) =>
         favoritesList.where((favorite) => favorite.id == id).isNotEmpty);
-    return (select(favorites)..where((favorite) => favorite.id.equals(id)))
-        .watch()
-        .map((favoritesList) => favoritesList.isNotEmpty);
   }
 }
 

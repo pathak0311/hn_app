@@ -1,16 +1,10 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
-import 'dart:isolate';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hn_app/src/article.dart';
 import 'package:hn_app/src/notifiers/worker.dart';
-import 'package:http/http.dart';
 import 'package:logging/logging.dart';
-
-Map<int, Article> _cachedArticles = {};
 
 enum StoriesType { topStories, newStories }
 
@@ -56,7 +50,6 @@ class HackerNewsNotifier with ChangeNotifier {
 }
 
 class HackerNewsTab with ChangeNotifier {
-  static const _baseURL = "https://hacker-news.firebaseio.com/v0/";
   late StoriesType storiesType;
   late String name;
 
@@ -88,33 +81,6 @@ class HackerNewsTab with ChangeNotifier {
 
     notifyListeners();
     loadingTabsCount.value -= 1;
-  }
-
-  Future<List<int>> _getIds(StoriesType type) async {
-    final partUrl = (type == StoriesType.topStories) ? 'top' : 'new';
-    final url = "$_baseURL${partUrl}stories.json";
-    // final response = await get(Uri.parse(url));
-    var error = () =>
-        throw HackerNewsApiException(300, 'Stories $type can\' be fetched.');
-
-    var response;
-
-    try {
-      response = await get(Uri.parse(url));
-    } on SocketException {
-      error();
-    }
-
-    if (response.statusCode != 200) {
-      // throw HackerNewsApiException('Stories $type can\' be fetched.');
-      error();
-    }
-
-    // var result = await compute<String, List<int>>(parseStoryIds, response.body);
-
-    var result = parseStoryIds(response.body);
-
-    return result.take(10).toList();
   }
 }
 

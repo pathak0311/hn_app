@@ -34,12 +34,14 @@ void main() {
       ),
       ChangeNotifierProvider(create: (_) => PrefsNotifier())
     ],
-    child: MyApp(),
+    child: const MyApp(),
   ));
 }
 
 class MyApp extends StatelessWidget {
   static const primaryColor = Colors.white;
+
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -63,11 +65,11 @@ class MyApp extends StatelessWidget {
           ? ThemeData.dark()
           : lightThemeData,
       theme: lightThemeData,
-      home: MyHomePage(),
+      home: const MyHomePage(),
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/':
-            return MaterialPageRoute(builder: (context) => MyHomePage());
+            return MaterialPageRoute(builder: (context) => const MyHomePage());
           case '/favorites':
             return PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) {
@@ -99,6 +101,8 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
@@ -172,12 +176,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     context: context, delegate: ArticleSearch(hn.allArticles));
 
                 if (result != null) {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => HackerNewsWebPage(
-                                url: result.url!,
-                              )));
+                  if (mounted) {
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => HackerNewsWebPage(
+                              url: result.url!,
+                            )));
+                  }
                 }
 
                 // launchUrl(Uri.parse(result.url!));
@@ -321,7 +325,8 @@ class _Item extends StatelessWidget {
                             child: WebView(
                               javascriptMode: JavascriptMode.unrestricted,
                               initialUrl: article.url,
-                              gestureRecognizers: Set()
+                              gestureRecognizers: <
+                                  Factory<OneSequenceGestureRecognizer>>{}
                                 ..add(Factory<VerticalDragGestureRecognizer>(
                                     () => VerticalDragGestureRecognizer())),
                             ),

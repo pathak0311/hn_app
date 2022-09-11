@@ -5,8 +5,9 @@ import 'package:hn_app/src/notifiers/hn_api.dart';
 class LoadingInfo extends StatefulWidget {
   final LoadingTabsCount isLoading;
 
-  LoadingInfo(this.isLoading);
+  const LoadingInfo(this.isLoading, {super.key});
 
+  @override
   createState() => LoadingInfoState();
 }
 
@@ -18,7 +19,7 @@ class LoadingInfoState extends State<LoadingInfo>
   void initState() {
     super.initState();
     _controller =
-        AnimationController(vsync: this, duration: Duration(seconds: 1));
+        AnimationController(vsync: this, duration: const Duration(seconds: 1));
     widget.isLoading.addListener(_handleLoadingChange);
   }
 
@@ -34,7 +35,7 @@ class LoadingInfoState extends State<LoadingInfo>
     return RotationTransition(
       turns: Tween(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(parent: _controller, curve: Curves.elasticOut)),
-      child: Icon(FontAwesomeIcons.hackerNewsSquare),
+      child: const Icon(FontAwesomeIcons.squareHackerNews),
     );
   }
 

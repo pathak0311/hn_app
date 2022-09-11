@@ -12,10 +12,10 @@ class Headline extends ImplicitlyAnimatedWidget {
       : super(key: key, duration: headlineAnimationDuration);
 
   @override
-  _HeadlineState createState() => _HeadlineState();
+  HeadlineState createState() => HeadlineState();
 }
 
-class _HeadlineState extends AnimatedWidgetBaseState<Headline> {
+class HeadlineState extends AnimatedWidgetBaseState<Headline> {
   GhostFadeTween? _colorTween;
   SwitchStringTween? _stringTween;
 
